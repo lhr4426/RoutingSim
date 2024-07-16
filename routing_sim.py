@@ -17,6 +17,7 @@ def main() :
 
     se.coupling_relation(None, "start", initializer_model, "start")
     se.coupling_relation(initializer_model, "init_done", predictor_model, "init_done")
+    se.coupling_relation(initializer_model, "init_done", mover_model, "init_done")
     se.coupling_relation(predictor_model, "pred_done", mover_model, "pred_done")
     se.coupling_relation(mover_model, "move_done", predictor_model, "move_done") 
 

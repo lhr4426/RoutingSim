@@ -1,6 +1,8 @@
 from pyevsim import BehaviorModelExecutor, SystemSimulator, Infinite, SysMessage
 import datetime
 import json
+import heapq
+from copy import deepcopy
 
 class initializer(BehaviorModelExecutor) :
     def __init__(self, instantiate_time, destruct_time, name, engine_name, config_file):
@@ -84,15 +86,36 @@ class predictor(BehaviorModelExecutor) :
         self.insert_input_port("move_done")
         self.insert_output_port("pred_done")
 
+        self.grid_scale = 0 
+        self.start_point = 0
+        self.end_point = 0
+        self.move_dict = {}
+
 
     def ext_trans(self, port, msg):
-        return super().ext_trans(port, msg)
+        # initializer -> predictor
+        if port == "init_done" :
+            self.grid_scale = msg.retrieve()[0]
+            self.start_point = msg.retrieve()[1]
+            self.end_point = msg.retrieve()[2]
+            self.move_dict = msg.retrieve()[3]
+            self._cur_state = "Init"
+
+        # mover -> predictor
+        elif port == "move_done" :
+            # TODO : 마지막 이동이 어디서 온건지 알아야함. 거기 제외하고 이동
+            self._cur_state = "Predict"
+        
+
     
     def output(self):
-        return super().output()
+        if self._cur_state == "Init" :
+
+        elif self._cur_state == "Predict" :
+            
     
     def int_trans(self):
-        return super().int_trans()
+        self._cur_state = "Wait"
 
 class mover(BehaviorModelExecutor) :
     def __init__(self, instantiate_time, destruct_time, name, engine_name):
@@ -101,11 +124,35 @@ class mover(BehaviorModelExecutor) :
         self.insert_state("Wait", Infinite)
         self.insert_state("Move", 1)
 
+        self.insert_input_port("init_done")
         self.insert_input_port("pred_done")
         self.insert_output_port("move_done")
 
+        self.recommended_route = []
+        self.current_position = ()
+        self.moving_log = []
+        
+        self.grid_scale = 0 
+        self.start_point = 0
+        self.end_point = 0
+        self.move_dict = {}
+
     def ext_trans(self, port, msg):
-        return super().ext_trans(port, msg)
+        # initializer -> mover
+        if port == "init_done" :
+            self.grid_scale = msg.retrieve()[0]
+            self.start_point = msg.retrieve()[1]
+            self.end_point = msg.retrieve()[2]
+            self.move_dict = msg.retrieve()[3]
+            self.current_position = deepcopy(self.start_point)
+            
+
+            self._cur_state = "Wait"
+
+        elif port == "pred_done" :
+            self.recommended_route = msg.retrieve()[0]
+            
+
     
     def output(self):
         return super().output()
