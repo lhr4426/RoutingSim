@@ -78,8 +78,7 @@ class predictor(BehaviorModelExecutor) :
     def __init__(self, instantiate_time, destruct_time, name, engine_name):
         BehaviorModelExecutor.__init__(self, instantiate_time, destruct_time, name, engine_name)
         self.init_state("Wait")
-        self.insert_state("Wait", Infinite)
-        self.insert_state("Init", 1)
+        self.insert_state("Wait", Infinite)        
         self.insert_state("Predict", 1)
 
         self.insert_input_port("init_done")
@@ -91,15 +90,18 @@ class predictor(BehaviorModelExecutor) :
         self.end_point = 0
         self.move_dict = {}
 
+        self.previous_position = {}
+
 
     def ext_trans(self, port, msg):
         # initializer -> predictor
         if port == "init_done" :
-            self.grid_scale = msg.retrieve()[0]
-            self.start_point = msg.retrieve()[1]
-            self.end_point = msg.retrieve()[2]
-            self.move_dict = msg.retrieve()[3]
-            self._cur_state = "Init"
+            self.grid_scale = msg.retrieve()[0] # int
+            self.start_point = msg.retrieve()[1] # tuple (x, y)
+            self.end_point = msg.retrieve()[2] # tuple (x, y)
+            self.move_dict = msg.retrieve()[3] 
+            self.previous_position = {self.start_point : None}
+            self._cur_state = "Predict"
 
         # mover -> predictor
         elif port == "move_done" :
@@ -107,11 +109,10 @@ class predictor(BehaviorModelExecutor) :
             self._cur_state = "Predict"
         
 
-    
     def output(self):
-        if self._cur_state == "Init" :
-
-        elif self._cur_state == "Predict" :
+        if self._cur_state == "Predict" :
+            # TODO : previos_position을 제외한 나머지 위치로의 이동을 해야함 
+        
             
     
     def int_trans(self):
@@ -145,10 +146,10 @@ class mover(BehaviorModelExecutor) :
             self.end_point = msg.retrieve()[2]
             self.move_dict = msg.retrieve()[3]
             self.current_position = deepcopy(self.start_point)
-            
 
             self._cur_state = "Wait"
 
+        # predictor -> mover
         elif port == "pred_done" :
             self.recommended_route = msg.retrieve()[0]
             
