@@ -3,6 +3,7 @@ import json
 import heapq
 from copy import deepcopy
 import os, sys
+import socket
 
 def key_to_position(input_key, prev_pos) :
     if input_key in ['f', 'b', 'l', 'r'] :
@@ -22,7 +23,7 @@ def key_to_position(input_key, prev_pos) :
 
 def position_to_key(prev_pos, cur_pos) :
     dx = cur_pos[0] - prev_pos[0]
-    dy = cur_pos[1] - cur_pos[1]
+    dy = cur_pos[1] - prev_pos[1]
     abs_dx = abs(dx)
     abs_dy = abs(dy)
 
@@ -39,11 +40,8 @@ def position_to_key(prev_pos, cur_pos) :
             return 'l'
 
 
-
-
-
 class initializer(BehaviorModelExecutor) :
-    def __init__(self, instantiate_time, destruct_time, name, engine_name, config_file):
+    def __init__(self, instantiate_time, destruct_time, name, engine_name, config_file, host='localhost', port='12345'):
         BehaviorModelExecutor.__init__(self, instantiate_time, destruct_time, name, engine_name)
         self.init_state("Wait")
         self.insert_state("Wait", Infinite)
@@ -52,11 +50,13 @@ class initializer(BehaviorModelExecutor) :
         self.insert_input_port("start")
         self.insert_output_port("init_done")
 
-        self.grid_scale = 0 
+        self.grid_scale = 3 # 사용자 입력 받도록 변경 가능함
         self.start_point = 0
         self.end_point = 0
         self.key_dict = {}
         self.config_file = config_file
+        self.host = host
+        self.port = port
 
     def ext_trans(self, port, msg) :
         if port == "start" :
@@ -64,17 +64,25 @@ class initializer(BehaviorModelExecutor) :
             self._cur_state = "Init"
     
     def output(self) :
+        # TODO : tcp 서버 하나 만들어서 다른 애들한테도 소켓 주기
         if self._cur_state == "Init" :
+
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.bind((self.host, self.port))
+            
+
             with open(self.config_file, 'r', encoding='utf-8') as f :
                 self.key_dict = json.load(f)
             print(f"moving keywords : {self.key_dict}")
 
-            while self.grid_scale == 0 :
-                try :
-                    self.grid_scale = int(input("Grid Scale (ex. 3): "))
-                except TypeError :
-                    print("Please enter the correct format.")
-                    continue
+            
+            
+            #while self.grid_scale == 0 :
+             #   try :
+              #      self.grid_scale = int(input("Grid Scale (ex. 3): "))
+               # except TypeError :
+                #    print("Please enter the correct format.")
+                 #   continue
             while self.start_point == 0 :                
                 input_data = input("Input Start Point x, y. (ex : 0, 0) : ")
                 try : 
@@ -296,7 +304,7 @@ class mover(BehaviorModelExecutor) :
         # if self._cur_state == "Move" :
         # 움직이는거 만들어야함. wasd 키 입력받게 하기
         # 움직인 위치를 moving_log에 넣고, predictor 모델에 전해주기
-        
+
         if self._cur_state == "Move" :
             input_key = input("Enter Moving Direction (w, a, s, d) : ")
             changed_input_key = self.key_dict.get(input_key)
