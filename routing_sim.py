@@ -3,7 +3,8 @@ from models import initializer, predictor, mover
 
 def main() :
     ss = SystemSimulator()
-    ss.register_engine("engine", "REAL_TIME", 1)
+    # ss.register_engine("engine", "REAL_TIME", 1)
+    ss.register_engine("engine", "VIRTUAL_TIME", 1)
     se = ss.get_engine("engine")
     
     se.insert_input_port("start")
