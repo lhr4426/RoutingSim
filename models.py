@@ -41,7 +41,7 @@ def position_to_key(prev_pos, cur_pos) :
 
 
 class initializer(BehaviorModelExecutor) :
-    def __init__(self, instantiate_time, destruct_time, name, engine_name, config_file, host='localhost', port='12345'):
+    def __init__(self, instantiate_time, destruct_time, name, engine_name, config_file, host='localhost', port=12345):
         BehaviorModelExecutor.__init__(self, instantiate_time, destruct_time, name, engine_name)
         self.init_state("Wait")
         self.insert_state("Wait", Infinite)
@@ -57,6 +57,7 @@ class initializer(BehaviorModelExecutor) :
         self.config_file = config_file
         self.host = host
         self.port = port
+        self.client_socket = None
 
     def ext_trans(self, port, msg) :
         if port == "start" :
@@ -67,15 +68,21 @@ class initializer(BehaviorModelExecutor) :
         # TODO : tcp 서버 하나 만들어서 다른 애들한테도 소켓 주기
         if self._cur_state == "Init" :
 
-            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server_socket.bind((self.host, self.port))
-            
-
             with open(self.config_file, 'r', encoding='utf-8') as f :
                 self.key_dict = json.load(f)
             print(f"moving keywords : {self.key_dict}")
 
-            
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_socket.bind((self.host, self.port))
+            server_socket.listen(1)
+
+            print(f"Server Open : {self.host}:{self.port}")
+
+            client_socket, client_address = server_socket.accept()
+            print(f"Client Connected : {client_address}")
+            self.client_socket = client_socket
+
             
             #while self.grid_scale == 0 :
              #   try :
@@ -84,8 +91,14 @@ class initializer(BehaviorModelExecutor) :
                 #    print("Please enter the correct format.")
                  #   continue
             while self.start_point == 0 :                
-                input_data = input("Input Start Point x, y. (ex : 0, 0) : ")
+                # input_data = input("Input Start Point x, y. (ex : 0, 0) : ")
                 try : 
+                    self.client_socket.sendall("Input Start Point x, y. (ex : 0, 0) : ".encode('utf-8'))
+                    input_data = self.client_socket.recv(1024).decode('utf-8')
+
+                    if not input_data :
+                        sys.exit()
+
                     x_str, y_str = input_data.split(',')
                     x = int(x_str.strip())
                     y = int(y_str.strip())
@@ -95,8 +108,14 @@ class initializer(BehaviorModelExecutor) :
                     print("Please enter the correct format.")
                     continue
             while self.end_point == 0 :
-                input_data = input("Input End Point x, y. (ex : 2, 2) : ")
+                # input_data = input("Input End Point x, y. (ex : 2, 2) : ")
                 try : 
+                    self.client_socket.sendall("Input End Point x, y. (ex : 2, 2) : ".encode('utf-8'))
+                    input_data = self.client_socket.recv(1024).decode('utf-8')
+
+                    if not input_data :
+                        sys.exit()
+                    
                     x_str, y_str = input_data.split(',')
                     x = int(x_str.strip())
                     y = int(y_str.strip())
@@ -111,6 +130,7 @@ class initializer(BehaviorModelExecutor) :
             msg.insert(self.start_point)
             msg.insert(self.end_point)
             msg.insert(self.key_dict)
+            msg.insert(self.client_socket)
             return msg
 
     def int_trans(self):
@@ -135,6 +155,7 @@ class predictor(BehaviorModelExecutor) :
         self.start_point = 0
         self.end_point = 0
         self.current_position = ()
+        self.client_socket = None
 
         self.key_dict = {}
         self.distances = {}
@@ -146,6 +167,8 @@ class predictor(BehaviorModelExecutor) :
 
 
 
+
+
     def ext_trans(self, port, msg):
         # initializer -> predictor
         if port == "init_done" :
@@ -153,6 +176,7 @@ class predictor(BehaviorModelExecutor) :
             self.start_point = msg.retrieve()[1] # tuple (x, y)
             self.end_point = msg.retrieve()[2] # tuple (x, y)
             self.key_dict = msg.retrieve()[3] 
+            self.client_socket = msg.retrieve()[4]
             self.distances = {(i, j) : float('inf') for i in range(self.grid_scale) for j in range(self.grid_scale)}
             self.distances[self.start_point] = 0
             self.current_position = deepcopy(self.start_point)
@@ -261,6 +285,7 @@ class mover(BehaviorModelExecutor) :
         self.start_point = 0
         self.end_point = 0
         self.key_dict = {}
+        self.client_socket = None
 
     def ext_trans(self, port, msg):
         # initializer -> mover
@@ -269,6 +294,7 @@ class mover(BehaviorModelExecutor) :
             self.start_point = msg.retrieve()[1]
             self.end_point = msg.retrieve()[2]
             self.key_dict = msg.retrieve()[3]
+            self.client_socket = msg.retrieve()[4]
             self.current_position = deepcopy(self.start_point)
 
             self._cur_state = "Wait"
@@ -280,7 +306,7 @@ class mover(BehaviorModelExecutor) :
                 print("No Recommanded Route. Exit RoutingSim.")
                 sys.exit()
                 
-
+            self.client_socket.sendall(recommended_key.encode('utf-8'))
             # 맵 그려줘야함. 이동 할 수 있는 곳은 '.' 으로 표시, 추천 경로는 '+' 로 표시, 현위치는 P로 표시
             # 입력, 저장하는 좌표는 xy 좌표. 
             os.system('cls')
@@ -306,7 +332,8 @@ class mover(BehaviorModelExecutor) :
         # 움직인 위치를 moving_log에 넣고, predictor 모델에 전해주기
 
         if self._cur_state == "Move" :
-            input_key = input("Enter Moving Direction (w, a, s, d) : ")
+            # input_key = input("Enter Moving Direction (w, a, s, d) : ")
+            input_key = self.client_socket.recv(1024).decode('utf-8')
             changed_input_key = self.key_dict.get(input_key)
             next_position = key_to_position(changed_input_key, self.current_position)
             print(f"Current Position : {self.current_position}, Next Position : {next_position}")
