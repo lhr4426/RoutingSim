@@ -1,6 +1,6 @@
 {
-    "w" : "f",
-    "s" : "b",
-    "a" : "l",
-    "d" : "r"
+    "w" : "front",
+    "s" : "back",
+    "a" : "left",
+    "d" : "right"
 }

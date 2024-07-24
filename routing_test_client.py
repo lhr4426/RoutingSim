@@ -2,34 +2,38 @@ import socket
 import threading
 import sys
 
-def receive_messages(client_socket):
-    while True:
+def receive_messages(client_socket : socket.socket, stop_event : threading.Event):
+    while not stop_event.is_set():
         try:
             message = client_socket.recv(1024).decode('utf-8')
             if not message:
                 print("Server Disconnected.")
-                sys.exit()
+                stop_event.set()
+                break
             print(f"\nServer : {message}")
         except Exception as e:
             print(f"Recv Error : {e}")
-            sys.exit()
+            stop_event.set()
+            break
 
-def send_messages(client_socket):
-    while True:
+def send_messages(client_socket : socket.socket, stop_event : threading.Event):
+    while not stop_event.is_set():
         try:
             message = input("\nInput Your Message : ")
             client_socket.sendall(message.encode('utf-8'))
         except Exception as e:
             print(f"Send Error : {e}")
-            sys.exit()
-            
+            stop_event.set()
+            break
 
 def start_tcp_client(host='localhost', port=12345):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((host, port))
     
-    receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
-    send_thread = threading.Thread(target=send_messages, args=(client_socket,))
+    stop_event = threading.Event()
+
+    receive_thread = threading.Thread(target=receive_messages, args=(client_socket, stop_event))
+    send_thread = threading.Thread(target=send_messages, args=(client_socket, stop_event))
     
     receive_thread.start()
     send_thread.start()

@@ -6,15 +6,15 @@ import os, sys
 import socket
 
 def key_to_position(input_key, prev_pos) :
-    if input_key in ['f', 'b', 'l', 'r'] :
+    if input_key in ['front', 'back', 'left', 'right'] :
         x, y = prev_pos
-        if input_key == 'f' : 
+        if input_key == 'front' : 
             y -= 1
-        elif input_key == 'b' :
+        elif input_key == 'back' :
             y += 1
-        elif input_key == 'l' :
+        elif input_key == 'left' :
             x -= 1
-        elif input_key == 'r' :
+        elif input_key == 'right' :
             x += 1
         cur_pos = (x, y)
         return cur_pos 
@@ -31,17 +31,17 @@ def position_to_key(prev_pos, cur_pos) :
         return None
     else :
         if dx == 0 and dy == -1 :
-            return 'f'
+            return 'front'
         elif dx == 0 and dy == 1 :
-            return 'b'
+            return 'back'
         elif dx == 1 and dy == 0 :
-            return 'r'
+            return 'right'
         elif dx == -1 and dy == 0 :
-            return 'l'
+            return 'left'
 
 
 class initializer(BehaviorModelExecutor) :
-    def __init__(self, instantiate_time, destruct_time, name, engine_name, config_file, host='localhost', port=12345):
+    def __init__(self, instantiate_time, destruct_time, name, engine_name, config_file, server_file):
         BehaviorModelExecutor.__init__(self, instantiate_time, destruct_time, name, engine_name)
         self.init_state("Wait")
         self.insert_state("Wait", Infinite)
@@ -55,9 +55,11 @@ class initializer(BehaviorModelExecutor) :
         self.end_point = 0
         self.key_dict = {}
         self.config_file = config_file
-        self.host = host
-        self.port = port
+        self.server_file = server_file
+        self.host = ""
+        self.port = 0
         self.client_socket = None
+
 
     def ext_trans(self, port, msg) :
         if port == "start" :
@@ -71,6 +73,11 @@ class initializer(BehaviorModelExecutor) :
             with open(self.config_file, 'r', encoding='utf-8') as f :
                 self.key_dict = json.load(f)
             print(f"moving keywords : {self.key_dict}")
+
+            with open(self.server_file, 'r', encoding='utf-8') as f :
+                data = json.load(f)
+                self.host = data["ip"]
+                self.port = data["port"]
 
             server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -232,6 +239,14 @@ class predictor(BehaviorModelExecutor) :
                         self.recommand_path.reverse()
                         # 시작 위치를 제외한 경로가 나와있는 상태
                         # 따라서, recommand_path[0]은 현 위치에서 추천하는 이동 위치
+                        
+                        str_path = f"Recommand Path:{self.recommand_path[0][0]},{self.recommand_path[0][1]}"
+                        if len(self.recommand_path) > 1 :
+                            for points in range(1, len(self.recommand_path)) :
+                                str_path += f"|{self.recommand_path[points][0]},{self.recommand_path[points][1]}"
+
+                        print(str_path)
+                        self.client_socket.sendall(str_path.encode('utf-8'))
 
                         msg = SysMessage(self.get_name(), "pred_done")
                         msg.insert(position_to_key(self.current_position, self.recommand_path[0]))
@@ -242,8 +257,9 @@ class predictor(BehaviorModelExecutor) :
                         # 상, 하, 좌, 우
                         neighbor = (x + dx, y + dy)
                         if 0 <= neighbor[0] < self.grid_scale and 0 <= neighbor[1] < self.grid_scale:
-                            if neighbor == self.previous_position:
-                                continue
+                            # 이전에 온 곳으로는 이동하지 않는 로직
+                            # if neighbor == self.previous_position:
+                                # continue
                             new_distance = current_distance + 1
                             if new_distance < self.distances[neighbor] :
                                 self.distances[neighbor] = new_distance
@@ -304,15 +320,17 @@ class mover(BehaviorModelExecutor) :
             recommended_key = msg.retrieve()[0]
             if recommended_key == "None" :
                 print("No Recommanded Route. Exit RoutingSim.")
+                self.client_socket.sendall("Finding Route Failed".encode('utf-8'))
                 sys.exit()
-                
-            self.client_socket.sendall(recommended_key.encode('utf-8'))
+
+            # self.client_socket.sendall(recommended_key.encode('utf-8'))
             # 맵 그려줘야함. 이동 할 수 있는 곳은 '.' 으로 표시, 추천 경로는 '+' 로 표시, 현위치는 P로 표시
             # 입력, 저장하는 좌표는 xy 좌표. 
             os.system('cls')
             map_grid = [['.'] * self.grid_scale for _ in range(self.grid_scale)]
             if recommended_key != "Goal" :
                 recommended_position = key_to_position(recommended_key, self.current_position)
+                self.client_socket.sendall(f"Next Point:{recommended_key}|{recommended_position[0]},{recommended_position[1]}".encode('utf-8'))
                 map_grid[recommended_position[1]][recommended_position[0]] = '+'
             map_grid[self.current_position[1]][self.current_position[0]] = 'P'
             for row in map_grid :
@@ -321,6 +339,11 @@ class mover(BehaviorModelExecutor) :
             if recommended_key == "Goal" :
                 print("Goal! Exit RoutingSim.")
                 print(f"Your Moving Log : {self.moving_log}")
+                str_moving_log = f"Moving Log:{self.start_point[0]},{self.start_point[0]}"
+                for logs in self.moving_log :
+                    str_moving_log += f"|{logs[0]},{logs[1]}"
+                # print(str_moving_log)
+                self.client_socket.sendall(str_moving_log.encode('utf-8'))
                 sys.exit()
 
             self._cur_state = "Move"
@@ -337,6 +360,10 @@ class mover(BehaviorModelExecutor) :
             changed_input_key = self.key_dict.get(input_key)
             next_position = key_to_position(changed_input_key, self.current_position)
             print(f"Current Position : {self.current_position}, Next Position : {next_position}")
+            if next_position[0] < 0 or next_position[1] < 0 :
+                print(f"Move Failed")
+                self.client_socket.sendall("Move Failed".encode('utf-8'))
+                sys.exit()
             if next_position == None :
                 print(f"Next Position == None.\ninput_key = {input_key}, cur_position = {self.current_position}")
                 sys.exit()

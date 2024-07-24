@@ -10,7 +10,7 @@ def main() :
     
         se.insert_input_port("start")
     
-        initializer_model = initializer(0, Infinite, "initializer", "engine", "key_binding.json")
+        initializer_model = initializer(0, Infinite, "initializer", "engine", "key_binding.json", "server_binding.json")
         se.register_entity(initializer_model)
         predictor_model = predictor(0, Infinite, "predictor", "engine")
         se.register_entity(predictor_model)
