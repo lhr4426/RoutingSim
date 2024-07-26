@@ -41,7 +41,7 @@ def position_to_key(prev_pos, cur_pos) :
             return 'left'
 
 def load_json_template() -> dict :
-    data = {'msg' : "-", 'recommendPath' : "-", 'nextRecommand' : "-", 'movingLog' : "-"}
+    data = {'msg' : "-", 'recommendPath' : "-", 'nextRecommend' : "-", 'movingLog' : "-"}
     return data
 
 class initializer(BehaviorModelExecutor) :
@@ -352,7 +352,7 @@ class mover(BehaviorModelExecutor) :
 
                 data = load_json_template()
                 data['msg'] = "Input Next Command"
-                data['nextRecommand'] = {'command' : recommended_key, 'location' : list(recommended_position)}
+                data['nextRecommend'] = {'command' : recommended_key, 'location' : list(recommended_position)}
                 json_data = json.dumps(data).encode('utf-8')
                 self.client_socket.sendall(json_data)
 
