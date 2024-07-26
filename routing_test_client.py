@@ -1,16 +1,18 @@
 import socket
 import threading
 import sys
+import json
 
 def receive_messages(client_socket : socket.socket, stop_event : threading.Event):
     while not stop_event.is_set():
         try:
-            message = client_socket.recv(1024).decode('utf-8')
+            message = client_socket.recv(4096)
+            receive_dict = json.loads(message.decode('utf-8'))
             if not message:
                 print("Server Disconnected.")
                 stop_event.set()
                 break
-            print(f"\nServer : {message}")
+            print(f"\nServer : {receive_dict}")
         except Exception as e:
             print(f"Recv Error : {e}")
             stop_event.set()
